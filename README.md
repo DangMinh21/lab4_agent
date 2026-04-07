@@ -23,7 +23,7 @@ LangGraph.
 ---
 
 ## Cấu Trúc Project
-
+```
 lab4_agent/
 ├── agent.py            # LangGraph graph: nodes, edges, chat loop
 ├── tools.py            # 3 custom tools + mock data
@@ -32,7 +32,7 @@ lab4_agent/
 ├── test_results.md     # Kết quả test thủ công (console log)
 ├── logs/               # Kết quả test tự động (markdown, có timestamp)
 └── .env                # API key (không commit)
-
+```
 ---
 
 ## Cài Đặt
@@ -92,3 +92,29 @@ Kết quả in ra console và tự động lưu vào logs/YYYYMMDD_HHMMSS.md:
   Result: 9/10 passed
   Log saved → logs/20260407_153621.md
 =======================================================
+```
+---
+
+## Quá Trình Thực Hiện
+
+### Phần 1 — System Prompt
+Thiết kế system prompt dạng XML với 4 khối: `<persona>`, `<rules>`, `<tools_instruction>`, `<response_format>`, `<constraints>`. Qua 2 vòng chỉnh sửa:
+- **V1:** Agent bỏ qua `calculate_budget`, tự tính toán trong câu trả lời → thêm rule bắt buộc dùng tool.
+- **V2:** Rule quá rộng khiến agent hỏi lại khi không cần → chỉ định rõ input tối thiểu cho từng tool.
+
+### Phần 2 — Custom Tools (`tools.py`)
+Implement 3 tools theo thứ tự tăng dần độ phức tạp:
+
+- **`search_flights`:** Tra cứu tuple key, xử lý chiều ngược với cảnh báo rõ ràng trong output.
+- **`search_hotels`:** Lọc theo giá, sort rating giảm dần, ẩn sentinel value `99999999` khỏi output.
+- **`calculate_budget`:** Parse chuỗi `"tên:số"`, xử lý lỗi format, in bảng chi tiết, cảnh báo vượt ngân sách.
+
+Lý do dùng format `"tên_khoản:số_tiền"` thay vì JSON: LLM ít bị lỗi syntax hơn khi sinh chuỗi đơn giản.
+
+### Phần 3 — LangGraph Agent (`agent.py`)
+Xây dựng graph với 2 nodes (`agent`, `tools`) và conditional edges. Agent tự quyết định gọi tool bao nhiêu lần dựa trên `tools_condition` của LangGraph — không cần hard-code thứ tự.
+
+### Phần 4 — Testing
+Viết `test.py` tự động hóa 10 test cases, capture stdout để đếm tool calls, lưu kết quả vào `logs/` có timestamp. Chạy 2 vòng:
+- **Vòng 1 (baseline):** 4/5 pass — Test 3 fail vì agent tự tính thay vì dùng tool.
+- **Vòng 2 (sau cải thiện prompt):** 9/10 pass — Test 7 agent dùng domain knowledge (Hội An không có sân bay) thay vì gọi tool, đây là hành vi đúng về nghiệp vụ dù lệch metric.
