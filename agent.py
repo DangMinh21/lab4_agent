@@ -14,8 +14,6 @@ load_dotenv()
 with open("system_prompt.txt", "r", encoding="utf-8") as f:
     SYSTEM_PROMPT = f.read()
 
-# print(SYSTEM_PROMPT)
-
 
 # 2. Khai báo State
 class AgentState(TypedDict):
@@ -53,9 +51,12 @@ tool_node = ToolNode(tools_list)
 builder.add_node("tools", tool_node) 
  
 # TODO: Sinh viên khai báo edges 
-# builder.add_edge(START, ...) 
-# builder.add_conditional_edges("agent", tools_condition) 
-# builder.add_edge("tools", ...) 
+# Định nghĩa edge từ START -> "agent"
+builder.add_edge(START, "agent") 
+# Nếu agent có sinh ra tool_calls -> đi tới "tools", ngược lại -> END
+builder.add_conditional_edges("agent", tools_condition) 
+# Sau khi chạy tools xong, bắt buộc quay lại edge để tổng hợp
+builder.add_edge("tools", "agent") 
  
 graph = builder.compile() 
 
