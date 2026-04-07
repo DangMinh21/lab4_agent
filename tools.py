@@ -242,22 +242,30 @@ def search_flights(origin: str, destination: str) -> str:
     flights = FLIGHTS_DB.get((origin, destination))
 
     # Nếu không có chiều thuận, thử chiều ngược.
-    # Lý do: user có thể hỏi "Đà Nẵng → Hà Nội" nhưng DB chỉ lưu "Hà Nội → Đà Nẵng".
-    # Thực tế các chuyến bay thường có cả hai chiều nên dùng cùng data là hợp lý.
+    # Phân biệt hai trường hợp để thông báo rõ cho user:
+    # - Tìm thấy chiều thuận → trả về bình thường
+    # - Chỉ có chiều ngược → trả về nhưng cảnh báo rõ
+    # - Không có cả hai → báo không tìm thấy
+    reversed_found = False
     if not flights:
         flights = FLIGHTS_DB.get((destination, origin))
+        if flights:
+            reversed_found = True
 
-    # Không tìm thấy cả hai chiều → báo rõ để agent trả lời user đúng.
     if not flights:
         return f"Không tìm thấy chuyến bay từ {origin} đến {destination}."
 
-    # Format output dễ đọc cho LLM tổng hợp.
-    # Dùng bullet point và pipe separator để LLM dễ parse khi cần extract số liệu
-    # (VD: extract giá vé để truyền vào calculate_budget).
-    lines = [f"Các chuyến bay từ {origin} → {destination}:\n"]
+    # Header khác nhau tùy trường hợp tìm thấy thuận hay ngược chiều.
+    if reversed_found:
+        header = (
+            f"Không tìm thấy chuyến bay từ {origin} → {destination}.\n"
+            f"Chỉ tìm thấy thông tin chiều ngược ({destination} → {origin}):\n"
+        )
+    else:
+        header = f"Các chuyến bay từ {origin} → {destination}:\n"
+
+    lines = [header]
     for f in flights:
-        # Format giá có dấu chấm phân cách (1.450.000đ) theo yêu cầu đề bài.
-        # Python f"{n:,}" dùng dấu phẩy → replace thành dấu chấm cho chuẩn VN.
         price_fmt = f"{f['price']:,}".replace(",", ".")
         lines.append(
             f"  • {f['airline']} | {f['departure']} → {f['arrival']}"
@@ -265,6 +273,7 @@ def search_flights(origin: str, destination: str) -> str:
         )
 
     return "\n".join(lines)
+
 
 @tool
 def search_hotels(city: str, max_price_per_night: int = 99999999) -> str:
@@ -290,6 +299,9 @@ def search_hotels(city: str, max_price_per_night: int = 99999999) -> str:
     # Lý do: giúp agent đưa ra lời khuyên hữu ích thay vì chỉ báo "không có".
     if not affordable:
         price_fmt = f"{max_price_per_night:,}".replace(",", ".")
+        
+        if max_price_per_night == 99999999:
+            return (f"Không tìm thấy khách sạn tại {city}")
         return (
             f"Không tìm thấy khách sạn tại {city} với giá dưới {price_fmt}đ/đêm. "
             f"Hãy thử tăng ngân sách."
@@ -299,7 +311,15 @@ def search_hotels(city: str, max_price_per_night: int = 99999999) -> str:
     # Lý do: LLM thường dùng vài kết quả đầu tiên → đặt chất lượng cao lên trước.
     affordable.sort(key=lambda h: h["rating"], reverse=True)
 
-    lines = [f"Khách sạn tại {city} (giá ≤ {f'{max_price_per_night:,}'.replace(',', '.')}đ/đêm):\n"]
+    # Chỉ hiển thị giá lọc trong header nếu user thực sự truyền vào.
+    # Lý do: giá trị mặc định 99999999 là sentinel nội bộ, không có ý nghĩa với user.
+    if max_price_per_night == 99999999:
+        header = f"Khách sạn tại {city}:\n"
+    else:
+        price_fmt = f"{max_price_per_night:,}".replace(",", ".")
+        header = f"Khách sạn tại {city} (giá ≤ {price_fmt}đ/đêm):\n"
+
+    lines = [header]
     for h in affordable:
         price_fmt = f"{h['price_per_night']:,}".replace(",", ".")
         # Format đầy đủ: tên, sao, khu vực, giá, rating
@@ -311,6 +331,7 @@ def search_hotels(city: str, max_price_per_night: int = 99999999) -> str:
         )
 
     return "\n".join(lines)
+
 
 @tool
 def calculate_budget(total_budget: int, expenses: str) -> str:
@@ -385,30 +406,50 @@ def calculate_budget(total_budget: int, expenses: str) -> str:
 
     return "\n".join(lines)
 
+
 if __name__ == "__main__":
+    
+    print(f"========== Test Search Flight tool ============")
     # Test chiều thuận
-  print(search_flights.invoke({'origin': 'Hà Nội', 'destination': 'Đà Nẵng'}))
-  print('---')
-  # Test chiều ngược
-  print(search_flights.invoke({'origin': 'Đà Nẵng', 'destination': 'Hà Nội'}))
-  print('---')
-  # Test không tồn tại
-  print(search_flights.invoke({'origin': 'Hà Nội', 'destination': 'Tokyo'}))
-  
-  # Test không lọc giá
-  print(search_hotels.invoke({'city': 'Đà Nẵng'}))
-  print('---')
-  # Test lọc giá (chỉ lấy <= 500.000đ)
-  print(search_hotels.invoke({'city': 'Đà Nẵng', 'max_price_per_night': 500000}))
-  print('---')
-  # Test thành phố không có trong DB
-  print(search_hotels.invoke({'city': 'Hà Nội'}))
-  
+    print(search_flights.invoke({"origin": "Hà Nội", "destination": "Đà Nẵng"}))
+    print("---")
+    # Test chiều ngược
+    print(search_flights.invoke({"origin": "Đà Nẵng", "destination": "Hà Nội"}))
+    print("---")
+    # Test không tồn tại
+    print(search_flights.invoke({"origin": "Hà Nội", "destination": "Tokyo"}))
+
+    print(f"========== Test Search Hotel tool ============")
+
+    # Test không lọc giá
+    print(search_hotels.invoke({"city": "Đà Nẵng"}))
+    print("---")
+    # Test lọc giá (chỉ lấy <= 500.000đ)
+    print(search_hotels.invoke({"city": "Đà Nẵng", "max_price_per_night": 500000}))
+    print("---")
+    # Test thành phố không có trong DB
+    print(search_hotels.invoke({"city": "Hà Nội"}))
+
+    print(f"========== Test Calculate Budget tool ============")
+
     # Test bình thường - còn dư
-  print(calculate_budget.invoke({'total_budget': 5000000, 'expenses': 'vé_máy_bay:1100000,khách_sạn:800000'}))
-  print('---')
-  # Test vượt ngân sách
-  print(calculate_budget.invoke({'total_budget': 2000000, 'expenses': 'vé_máy_bay:1100000,khách_sạn:1500000'}))
-  print('---')
-  # Test format lỗi
-  print(calculate_budget.invoke({'total_budget': 5000000, 'expenses': 'vé_máy_bay:abc'}))
+    print(
+        calculate_budget.invoke(
+            {"total_budget": 5000000, "expenses": "vé_máy_bay:1100000,khách_sạn:800000"}
+        )
+    )
+    print("---")
+    # Test vượt ngân sách
+    print(
+        calculate_budget.invoke(
+            {
+                "total_budget": 2000000,
+                "expenses": "vé_máy_bay:1100000,khách_sạn:1500000",
+            }
+        )
+    )
+    print("---")
+    # Test format lỗi
+    print(
+        calculate_budget.invoke({"total_budget": 5000000, "expenses": "vé_máy_bay:abc"})
+    )
