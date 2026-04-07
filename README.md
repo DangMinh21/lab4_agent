@@ -24,14 +24,14 @@
 
   ## Cấu Trúc Project
 
-  lab4_agent/
-  ├── agent.py            # LangGraph graph: nodes, edges, chat loop
-  ├── tools.py            # 3 custom tools + mock data
-  ├── system_prompt.txt   # System prompt định hình hành vi agent
-  ├── test.py             # Test runner tự động 10 test cases
-  ├── test_results.md     # Kết quả test thủ công (console log)
-  ├── logs/               # Kết quả test tự động (markdown, có timestamp)
-  └── .env                # API key (không commit)
+lab4_agent/
+├── agent.py            # LangGraph graph: nodes, edges, chat loop
+├── tools.py            # 3 custom tools + mock data
+├── system_prompt.txt   # System prompt định hình hành vi agent
+├── test.py             # Test runner tự động 10 test cases
+├── test_results.md     # Kết quả test thủ công (console log)
+├── logs/               # Kết quả test tự động (markdown, có timestamp)
+└── .env                # API key (không commit)
 
   ---
 
